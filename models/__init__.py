@@ -1,2 +1,3 @@
-import rbm, mlp
-from dnn import *
+from .mlp import mlp
+from .rbm import rbm
+from .dnn import dnn

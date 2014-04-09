@@ -39,8 +39,7 @@ class mlp:
 		self.act    = self.n_hid * [None]
 		self.act0   =  None
 		
-		self.dE     = self.n_hid * [None]
-		self.error  = []
+		self.dE     = self.n_hid * [None]		
 
 		for k in xrange(self.n_hid):
 			self.W[k] = 1e-2 * np.random.standard_normal( (layers[k], layers[k+1]) )
@@ -53,8 +52,15 @@ class mlp:
 		return self.sigmoid(x) * (1 - self.sigmoid(x))
 
 	def softmax(self, x):
-		Z = np.sum( np.exp(x), axis=1 )
-		return np.exp(x) / Z.reshape( (x.shape[0],1) )
+		# tbd: add overflow protection...
+		if 1:		
+			Z = np.sum( np.exp(x), axis=1 )
+			return np.exp(x) / Z.reshape( (x.shape[0],1) )
+		else:
+			xc = np.copy(x)
+			xc[:,0] = 0 # unconnect first input
+			Z = np.sum( np.exp(xc), axis=1 )
+			return np.exp(xc) / Z.reshape( (xc.shape[0],1) )
 
 	def f_prop(self, x):
 		n_examples  = x.shape[0]
@@ -105,7 +111,7 @@ class mlp:
 		self.f_prop(data)
 		self.b_prop(target)
 
-	def train(self, data, target, batch_size=1, learning_rate=1e-1, epochs=10, momentum=0):
+	def train(self, data, target, batch_size=1, learning_rate=1e-1, epochs=10, momentum=0, weight_decay=0):
 		n_batches = data.shape[0] / batch_size
 
 		W_inc = self.n_hid * [None]
@@ -115,23 +121,26 @@ class mlp:
 			W_inc[k] = np.zeros( self.W[k].shape )
 			b_inc[k] = np.zeros( self.b[k].shape )
 		
+		error  = []
 		for epoch in xrange(epochs):			
 			
 			for n in xrange(n_batches):
-				index = np.arange(n * batch_size, (n + 1) * batch_size)
+				index = np.arange(n * batch_size, (n + 1) * batch_size, dtype='int')
 				self.grad(data[index], target[index])								
 
 				for k in xrange(self.n_hid):
-					W_inc[k] = learning_rate * self.dW[k] + momentum * W_inc[k]
+					W_inc[k] = momentum * W_inc[k] + learning_rate * (self.dW[k] + weight_decay*self.W[k])
 					b_inc[k] = learning_rate * self.db[k] + momentum * b_inc[k]
 
 					self.W[k] -= W_inc[k]
 					self.b[k] -= b_inc[k]
 
 				cost, _ = self.cost(target[index])
-				self.error.append(cost)
+				error.append(cost)
 
-				print "epoch %d/%d, [%d/%d], cost=%f" % (epoch+1, epochs, n+1, n_batches, cost)
+				#print "epoch %d/%d, [%d/%d], cost=%f" % (epoch+1, epochs, n+1, n_batches, cost)
+
+		return np.sum(error)
 
 	def classify(self, data):
 		act = self.f_prop(data)

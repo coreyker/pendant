@@ -13,7 +13,7 @@ import mlp
 import pdb
 
 class dnn:
-	def __init__(self, layers, rng_seed=None):
+	def __init__(self, layers, mean=None, rng_seed=None):
 		'''
 		layers is a list specifying the dimension of each network layer:
 			layers = [#n_visible, #n_hidden1, #n_hidden2, ...]
@@ -31,7 +31,12 @@ class dnn:
 		self.rbm    = (self.n_hid - 1) * [None]
 		
 		# initialize RBMs
-		for k in xrange(self.n_hid - 1): # skip last layer which uses softmax instead of binary units
+		if 1:
+			self.rbm[0] = rbm.rbm(layers[0], layers[1], input_type='binary', mean=mean)
+		else:
+			self.rbm[0] = rbm.rbm(layers[0], layers[1], input_type='gaussian')
+
+		for k in xrange(1, self.n_hid - 1): # skip last layer which uses softmax instead of binary units
 			self.rbm[k] = rbm.rbm(layers[k], layers[k+1], input_type='binary')
 
 	def pre_train(self, data, batch_size=1, learning_rate=1e-1, epochs=10, cd_steps=1, momentum=0, weight_decay=0):
@@ -39,11 +44,12 @@ class dnn:
 		Greedy layer-wise pre-training using RBMs
 		'''		
 		vis = np.copy(data)
+		error = 0
 		for k in xrange(self.n_hid - 1):
 			# train rbm
-			print 'Pre-training layer %d of %d' % (k+1, self.n_hid)
-			print '----------------------------------'
-			self.rbm[k].train(vis, batch_size, learning_rate, epochs, cd_steps, momentum, weight_decay)
+			#print 'Pre-training layer %d of %d' % (k+1, self.n_hid)
+			#print '----------------------------------'
+			error += self.rbm[k].train(vis, batch_size, learning_rate, epochs, cd_steps, momentum, weight_decay)
 
             # copy new weights into mlp as they are learned
 			self.mlp.W[k] = np.copy(self.rbm[k].W)
@@ -52,22 +58,28 @@ class dnn:
             # hidden layer at level k becomes the visible layer at level k+1
 			vis = self.rbm[k].propup(vis)
 
-	def fine_tune(self, data, target, depth='deep', batch_size=1, learning_rate=0.1, epochs=10, momentum=0):
+		return error
+
+	def fine_tune(self, data, target, depth='deep', batch_size=1, learning_rate=0.1, epochs=10, momentum=0, weight_decay=0):
 		'''
 		Discriminative fine tuning of MLP weights. In most cases pre_train() should be called first
 		'''		
-		if depth=='deep': # fine-tune all layers			
-			self.mlp.train(data, target, batch_size, learning_rate, epochs, momentum)
+		# fine-tune all layers			
+		if depth=='deep': 
+			error = self.mlp.train(data, target, batch_size, learning_rate, epochs, momentum, weight_decay)
 
-		elif depth=='shallow': # fine-tune deepest layer only
-			perceptron = mlp.mlp([self.layers[-2], self.layers[-1]])
-			perceptron.train( self.calc_rep(data), target, batch_size, learning_rate, epochs, momentum )
-
+		# fine-tune deepest layer only
+		elif depth=='shallow': 
+			perceptron     = mlp.mlp([self.layers[-2], self.layers[-1]])
+			error          = perceptron.train( self.calc_rep(data), target, batch_size, learning_rate, epochs, momentum )
+			
 			# copy weights into last layer
 			self.mlp.W[-1] = np.copy(perceptron.W[-1])
 			self.mlp.b[-1] = np.copy(perceptron.b[-1])	
 		else:
 			raise Exception("Unknown depth.  Currently recognized options are 'deep' or 'shallow'")						
+
+		return error
 
 	def calc_rep(self, data):
 		'''
@@ -121,7 +133,7 @@ def test_dnn():
 	nnet.pre_train(train_data, batch_size, learning_rate=1e-1, epochs=10, momentum=0.8) # set epochs=0 to see effect of pre-training
 	
 	# fine tune
-	depth      = 'deep'
+	depth      = 'shallow' #'deep'
 	nnet.fine_tune(train_data, train_target, depth, batch_size, learning_rate=1e-1, epochs=10, momentum=0.8)	
 
 	# test
