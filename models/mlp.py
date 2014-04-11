@@ -53,9 +53,10 @@ class mlp:
 
 	def softmax(self, x):
 		# tbd: add overflow protection...
-		if 1:		
-			Z = np.sum( np.exp(x), axis=1 )
-			return np.exp(x) / Z.reshape( (x.shape[0],1) )
+		if 1:
+			expx = np.exp(x)
+			Z = np.sum(expx, axis=1 )
+			return expx / Z.reshape( (x.shape[0],1) )
 		else:
 			xc = np.copy(x)
 			xc[:,0] = 0 # unconnect first input
@@ -103,7 +104,7 @@ class mlp:
 		for n,k in enumerate(target):
 			c += -np.log(output[n, k])
 			dC[n,k] -= 1
-		c /= n_examples
+		#c /= n_examples
 
 		return c, dC
 

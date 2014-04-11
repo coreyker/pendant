@@ -14,7 +14,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 class rbm:
-	def __init__(self, n_visible=10, n_hidden=10, input_type='binary', mean=None, rng_seed=None, persistent=False):				
+	def __init__(self, n_visible=10, n_hidden=10, input_type='binary', output_type='binary', input_mean=None, rng_seed=None, persistent=False):				
 
 		if rng_seed:
 			np.random.seed(rng_seed)
@@ -24,14 +24,17 @@ class rbm:
 		self.n_hidden     = n_hidden		
 		if not (input_type=='binary' or input_type=='gaussian' or input_type=='rlu'):
 			raise Exception("Unknown input type.  Currently recognized options are 'binary' or 'gaussian'")			
-		self.input_type   = input_type		
+		if not (output_type=='binary' or output_type=='softmax'):
+			raise Exception("Unknown output type.  Currently recognized options are 'binary' or 'softmax'")			
+		self.input_type   = input_type
+		self.output_type  = output_type
 		self.persistent   = persistent
 		self.model_sample = None
 
-		if not np.any(mean):
-			self.mean     = np.zeros((1,n_visible))
+		if not np.any(input_mean):
+			self.input_mean     = np.zeros((1,n_visible))
 		else:
-			self.mean     = mean
+			self.input_mean     = input_mean
 
 		self.h_bias       = np.zeros( (1, n_hidden) )
 		self.v_bias       = np.zeros( (1, n_visible) )
@@ -44,33 +47,53 @@ class rbm:
 	def sigmoid(self, x):
 		return 1. / (1 + np.exp(-x))
 
+	def softmax(self, x):
+		expx = np.exp(x)
+		Z = np.sum(expx, axis=1 )
+		return expx / Z.reshape( (x.shape[0],1) )
+
 	def propup(self, vis):
 		n_examples = vis.shape[0]
-		return self.sigmoid( np.dot(vis, self.W) + np.repeat(self.h_bias, n_examples, axis=0) )
+		pot = np.dot(vis, self.W) + np.repeat(self.h_bias, n_examples, axis=0)
+		
+		if self.output_type=='binary':
+			return self.sigmoid( pot )
+		elif self.output_type=='softmax':
+			return self.softmax( pot )
 
 	def propdown(self, hid):
 		n_examples = hid.shape[0]
-		u = np.dot(hid, self.W.T) + np.repeat(self.v_bias, n_examples, axis=0)
+		pot = np.dot(hid, self.W.T) + np.repeat(self.v_bias, n_examples, axis=0)
+		
 		if self.input_type=='binary':
-			return self.sigmoid(u)
+			return self.sigmoid(pot)
 		elif self.input_type=='gaussian':
-			return u
+			return pot
 		elif self.input_type=='rlu':
-			return u
+			return pot
 
 	def sample_h_given_v(self, sample):	
 		n_examples = sample.shape[0]
-		return np.random.binomial( n=1, p=self.propup(sample), size=(n_examples, self.n_hidden) )
-	
+		pot = self.propup(sample)
+
+		if self.output_type=='binary':
+			return np.random.binomial( n=1, p=pot, size=(n_examples, self.n_hidden) )
+		elif self.output_type=='softmax':
+			hid = np.zeros(pot.shape)
+			ind = np.argmax(pot, axis=1)
+			for i,row in zip(ind,hid):
+				row[i]=1
+			return hid
+
 	def sample_v_given_h(self, sample):
 		n_examples = sample.shape[0]
 		u = self.propdown( sample )
 
 		if self.input_type=='binary':
 			if 1:
-				return u - np.repeat(self.mean, n_examples, axis=0) 
+				return u - np.repeat(self.input_mean, n_examples, axis=0) 
 			else:
-				return np.random.binomial( n=1, p=u ) - np.repeat(self.mean, n_examples, axis=0)
+				return np.random.binomial( n=1, p=u ) - np.repeat(self.input_mean, n_examples, axis=0)
 		elif self.input_type=='gaussian':
 			return u + np.random.standard_normal( u.shape )
 		elif self.input_type=='rlu':
@@ -84,7 +107,6 @@ class rbm:
 		"""
 		data_sample: A matrix with self.n_visible columns and one row per data sample
 		"""
-
 		batch_size = data_sample.shape[0]				
 
 		# positive phase
