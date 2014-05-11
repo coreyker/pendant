@@ -32,17 +32,17 @@ class rbm:
 		self.model_sample = None
 
 		if not np.any(input_mean):
-			self.input_mean     = np.zeros((1,n_visible))
+			self.input_mean = np.zeros((1,n_visible))
 		else:
-			self.input_mean     = input_mean
+			self.input_mean = input_mean
 
-		self.h_bias       = np.zeros( (1, n_hidden) )
-		self.v_bias       = np.zeros( (1, n_visible) )
-		self.W            = 1e-2 * np.random.randn( n_visible, n_hidden )
-
-		self.W_inc        = np.zeros( (n_visible, n_hidden) )
-		self.h_inc        = np.zeros( (1, n_hidden) )
-		self.v_inc        = np.zeros( (1, n_visible) )
+		self.h_bias = np.zeros( (1, n_hidden) )
+		self.v_bias = np.zeros( (1, n_visible) )
+		self.W      = 1e-2 * np.random.randn( n_visible, n_hidden )
+		
+		self.W_inc  = np.zeros( (n_visible, n_hidden) )
+		self.h_inc  = np.zeros( (1, n_hidden) )
+		self.v_inc  = np.zeros( (1, n_visible) )
 
 	def sigmoid(self, x):
 		return 1. / (1 + np.exp(-x))
@@ -157,9 +157,9 @@ class rbm:
 				Err[-1] += err
 
 				# is this use of momentum correct? should there be (1-momentum) attached to the second term?
-				self.W_inc  = self.W_inc * momentum + learning_rate * (W_grad - weight_decay*self.W)
-				self.h_inc  = self.h_inc * momentum + learning_rate * h_grad
-				self.v_inc  = self.v_inc * momentum + learning_rate * v_grad								
+				self.W_inc  = self.W_inc * momentum + (1-momentum) * learning_rate * (W_grad - weight_decay * self.W / float(n_batches))
+				self.h_inc  = self.h_inc * momentum + (1-momentum) * learning_rate * h_grad
+				self.v_inc  = self.v_inc * momentum + (1-momentum) * learning_rate * v_grad								
 
 				self.W      += self.W_inc
 				self.h_bias += self.h_inc
